@@ -60,84 +60,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { fetchAPI, getAuthHeader, getUserId } from '@/api/apiClient';
+import { Listing, Booking, ApiResponse } from '@/api/types';
+import { useToast } from '@/components/ui/use-toast';
 
-const mockListings = [
-  {
-    id: '1',
-    title: 'Modern Conference Room',
-    description: 'Perfect for business meetings and presentations',
-    type: 'Conference',
-    price: 120,
-    currency: 'INR',
-    capacity: 20,
-    active: true,
-    bookings: 5,
-    rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
-  },
-  {
-    id: '2',
-    title: 'Cozy Studio Space',
-    description: 'Ideal for photo shoots and creative work',
-    type: 'Studio',
-    price: 80,
-    currency: 'INR',
-    capacity: 10,
-    active: true,
-    bookings: 12,
-    rating: 4.5,
-    image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
-  },
-  {
-    id: '3',
-    title: 'Garden Event Space',
-    description: 'Beautiful outdoor venue for events and weddings',
-    type: 'Event Space',
-    price: 300,
-    currency: 'INR',
-    capacity: 100,
-    active: false,
-    bookings: 2,
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1729&q=80'
-  },
-];
-
-const mockBookings = [
-  {
-    id: 'b1',
-    listingId: '1',
-    customerName: 'John Doe',
-    date: '2025-04-07',
-    time: '09:00 - 11:00',
-    status: 'confirmed',
-    attendees: 10,
-    totalPaid: 120
-  },
-  {
-    id: 'b2',
-    listingId: '1',
-    customerName: 'Jane Smith',
-    date: '2025-04-07',
-    time: '14:00 - 16:00',
-    status: 'confirmed',
-    attendees: 15,
-    totalPaid: 120
-  },
-  {
-    id: 'b3',
-    listingId: '2',
-    customerName: 'Alex Johnson',
-    date: '2025-04-08',
-    time: '10:00 - 14:00',
-    status: 'pending',
-    attendees: 5,
-    totalPaid: 80
-  }
-];
-
-// Component to display a calendar preview
-const CalendarPreview: React.FC = () => {
+// Component to display a calendar preview with real data
+const CalendarPreview: React.FC<{bookings?: Booking[]}> = ({ bookings = [] }) => {
   const today = new Date();
   const month = today.toLocaleString('default', { month: 'long' });
   const year = today.getFullYear();
@@ -181,7 +109,7 @@ const CalendarPreview: React.FC = () => {
               day === currentDay 
                 ? "bg-bookeasy-orange text-white font-medium" 
                 : "text-gray-700 hover:bg-gray-100",
-              mockBookings.some(booking => {
+              bookings.some(booking => {
                 const bookingDate = new Date(booking.date);
                 return bookingDate.getDate() === day && 
                        bookingDate.getMonth() === today.getMonth() && 
@@ -227,6 +155,221 @@ const BusinessDashboard: React.FC = () => {
   const [showAddListingDialog, setShowAddListingDialog] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const { toast } = useToast();
+  
+  // Real data states
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [filterType, setFilterType] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // API functions for fetching data - moved to the top to maintain hooks order
+  const fetchListings = async () => {
+    setListingsLoading(true);
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      const response = await fetchAPI('/business/listings', {
+        headers: {
+          ...getAuthHeader(),
+          'user-id': userId,
+        }
+      });
+      
+      setListings(response);
+      setListingsLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch listings:', error);
+      toast({
+        title: "Error",
+        description: "Could not load your listings. Please try again.",
+        variant: "destructive"
+      });
+      setListingsLoading(false);
+    }
+  };
+
+  const fetchBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      const response = await fetchAPI('/bookings', {
+        headers: {
+          ...getAuthHeader(),
+          'user-id': userId,
+          'user-type': 'business'
+        }
+      });
+      
+      setBookings(response);
+      setBookingsLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch bookings:', error);
+      toast({
+        title: "Error",
+        description: "Could not load your bookings. Please try again.",
+        variant: "destructive"
+      });
+      setBookingsLoading(false);
+    }
+  };
+
+  const toggleListingStatus = async (id: string) => {
+    const listing = listings.find(l => l.id === id);
+    if (!listing) return;
+    
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      await fetchAPI(`/listings/${id}`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeader(),
+          'user-id': userId,
+        },
+        body: JSON.stringify({
+          active: !listing.active
+        })
+      });
+      
+      // Update the local state with the toggled listing
+      setListings(prevListings => 
+        prevListings.map(l => 
+          l.id === id ? { ...l, active: !l.active } : l
+        )
+      );
+      
+      toast({
+        title: "Success",
+        description: `Listing has been ${!listing.active ? 'activated' : 'deactivated'}.`,
+      });
+    } catch (error) {
+      console.error('Failed to toggle listing status:', error);
+      toast({
+        title: "Error",
+        description: "Could not update listing status. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const createListing = async () => {
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      // Create data object for API submission
+      const listingData = {
+        title: formData.title,
+        description: formData.description,
+        type: formData.category,
+        price: parseInt(formData.price),
+        capacity: parseInt(formData.capacity),
+        location: formData.location,
+        currency: 'INR',
+        tags: formData.tags,
+        active: true
+      };
+      
+      // Send the request to create listing
+      const response = await fetchAPI('/listings', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeader(),
+          'user-id': userId,
+        },
+        body: JSON.stringify(listingData)
+      });
+      
+      // Add the new listing to state
+      setListings(prev => [...prev, response]);
+      
+      // Close the dialog and reset form
+      setShowAddListingDialog(false);
+      setCurrentStep(1);
+      setFormData({
+        title: '',
+        description: '',
+        type: '',
+        location: '',
+        date: '',
+        time: '',
+        timeEnd: '',
+        price: '',
+        capacity: '',
+        category: '',
+        tags: [],
+        termsAccepted: false,
+        images: [],
+        imagePreview: [],
+      });
+      setSelectedTags([]);
+      
+      toast({
+        title: "Success",
+        description: "Your new listing has been created!",
+      });
+    } catch (error) {
+      console.error('Failed to create listing:', error);
+      toast({
+        title: "Error",
+        description: "Could not create your listing. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updateBookingStatus = async (bookingId: string, status: 'confirmed' | 'cancelled') => {
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      await fetchAPI(`/bookings/${bookingId}/status`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeader(),
+          'user-id': userId,
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      // Update the local state with the updated booking status
+      setBookings(prevBookings => 
+        prevBookings.map(b => 
+          b.id === bookingId ? { ...b, status } : b
+        )
+      );
+      
+      toast({
+        title: "Success",
+        description: `Booking ${status === 'confirmed' ? 'confirmed' : 'cancelled'} successfully.`,
+      });
+    } catch (error) {
+      console.error(`Failed to update booking status:`, error);
+      toast({
+        title: "Error",
+        description: "Could not update booking status. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -315,7 +458,7 @@ const BusinessDashboard: React.FC = () => {
       setFormData({
         ...formData,
         images: [...formData.images, ...filesArray],
-        imagePreview: [...formData.imagePreview, ...newPreviewUrls]
+        imagePreview: [...newPreviewUrls]
       });
     }
   };
@@ -356,29 +499,8 @@ const BusinessDashboard: React.FC = () => {
   };
 
   const handleSubmit = () => {
-    // In a real app, this would send data to an API
-    console.log("Submitting form data:", formData);
-    
-    // Close the dialog and reset form
-    setShowAddListingDialog(false);
-    setCurrentStep(1);
-    setFormData({
-      title: '',
-      description: '',
-      type: '',
-      location: '',
-      date: '',
-      time: '',
-      timeEnd: '',
-      price: '',
-      capacity: '',
-      category: '',
-      tags: [],
-      termsAccepted: false,
-      images: [],
-      imagePreview: [],
-    });
-    setSelectedTags([]);
+    // Call the createListing function to submit the form data to the API
+    createListing();
   };
 
   useEffect(() => {
@@ -387,6 +509,20 @@ const BusinessDashboard: React.FC = () => {
       navigate('/auth', { state: { userType: 'business' } });
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (!loading && user) {
+      fetchListings();
+      fetchBookings();
+    }
+  }, [user, loading]);
+
+  useEffect(() => {
+    // Import and initialize user sync
+    import('../lib/userSync').then(module => {
+      module.initUserSync();
+    });
+  }, []);
 
   const handleLogout = async () => {
     await logOut();
@@ -400,7 +536,7 @@ const BusinessDashboard: React.FC = () => {
     day: 'numeric'
   });
 
-  const todaysBookings = mockBookings.filter(booking => {
+  const todaysBookings = bookings.filter(booking => {
     const bookingDate = new Date(booking.date).toISOString().split('T')[0];
     const todayDate = new Date().toISOString().split('T')[0];
     return bookingDate === todayDate;
@@ -414,11 +550,6 @@ const BusinessDashboard: React.FC = () => {
       </div>
     );
   }
-
-  const toggleListingStatus = (id: string) => {
-    // In a real app, this would update the database
-    console.log(`Toggling status for listing ${id}`);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -474,7 +605,7 @@ const BusinessDashboard: React.FC = () => {
           {(activeItem === "dashboard" || activeItem === "calendar") && (
             <div className="p-4">
               <h3 className="text-sm font-medium text-gray-700 mb-2">Calendar Preview</h3>
-              <CalendarPreview />
+              <CalendarPreview bookings={bookings} />
             </div>
           )}
 
@@ -507,7 +638,7 @@ const BusinessDashboard: React.FC = () => {
                     className="flex items-center space-x-2 border-bookeasy-orange text-bookeasy-orange hover:bg-bookeasy-orange/10"
                   >
                     <Bell className="h-4 w-4" />
-                    <span className="font-medium">{mockBookings.filter(b => b.status === 'pending').length}</span>
+                    <span className="font-medium">{bookings.filter(b => b.status === 'pending').length}</span>
                   </Button>
                   <Avatar className="h-10 w-10 border-2 border-bookeasy-orange">
                     {user?.photoURL ? (
@@ -529,9 +660,9 @@ const BusinessDashboard: React.FC = () => {
                     <Building2 className="h-4 w-4 text-bookeasy-orange" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{mockListings.length}</div>
+                    <div className="text-2xl font-bold">{listings.length}</div>
                     <p className="text-xs text-muted-foreground">
-                      {mockListings.filter(l => l.active).length} active listings
+                      {listings.filter(l => l.active).length} active listings
                     </p>
                   </CardContent>
                 </Card>
@@ -555,9 +686,9 @@ const BusinessDashboard: React.FC = () => {
                     <Bell className="h-4 w-4 text-blue-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{mockBookings.filter(b => b.status === 'pending').length}</div>
+                    <div className="text-2xl font-bold">{bookings.filter(b => b.status === 'pending').length}</div>
                     <p className="text-xs text-muted-foreground">
-                      {mockBookings.filter(b => b.status === 'pending').length} pending requests
+                      {bookings.filter(b => b.status === 'pending').length} pending requests
                     </p>
                   </CardContent>
                 </Card>
@@ -575,9 +706,9 @@ const BusinessDashboard: React.FC = () => {
               {/* Listing Cards */}
               <h2 className="text-xl font-medium text-gray-800 mb-4">Your Current Listings</h2>
               
-              {mockListings.length > 0 ? (
+              {listings.length > 0 ? (
                 <div className="space-y-4">
-                  {mockListings.map((listing) => (
+                  {listings.map((listing) => (
                     <Card key={listing.id} className="overflow-hidden">
                       <div className="flex flex-col md:flex-row h-full">
                         <div className="w-full md:w-1/4 h-48 md:h-auto relative">
@@ -633,7 +764,7 @@ const BusinessDashboard: React.FC = () => {
                           </div>
 
                           <div className="mt-4">
-                            <CalendarPreview />
+                            <CalendarPreview bookings={bookings} />
                           </div>
                         </div>
                       </div>
@@ -691,7 +822,7 @@ const BusinessDashboard: React.FC = () => {
               <Tabs defaultValue="grid">
                 <div className="flex justify-between items-center mb-6">
                   <div className="text-sm text-gray-500">
-                    Showing {mockListings.length} listings
+                    Showing {listings.length} listings
                   </div>
                   <TabsList>
                     <TabsTrigger value="grid">Grid</TabsTrigger>
@@ -701,7 +832,7 @@ const BusinessDashboard: React.FC = () => {
 
                 <TabsContent value="grid">
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {mockListings.map((listing) => (
+                    {listings.map((listing) => (
                       <Card key={listing.id} className="overflow-hidden">
                         <div className="h-48 relative">
                           <img 
@@ -775,7 +906,7 @@ const BusinessDashboard: React.FC = () => {
 
                 <TabsContent value="list">
                   <div className="space-y-4">
-                    {mockListings.map((listing) => (
+                    {listings.map((listing) => (
                       <Card key={listing.id} className="overflow-hidden">
                         <div className="flex flex-col sm:flex-row">
                           <div className="w-full sm:w-48 h-48 sm:h-auto relative">
@@ -858,7 +989,7 @@ const BusinessDashboard: React.FC = () => {
               <h1 className="text-3xl font-bold text-gray-800 mb-8">Calendar</h1>
               <p className="text-gray-600 mb-8">This is the calendar view for managing your bookings.</p>
               <div className="bg-white p-6 rounded-lg shadow">
-                <CalendarPreview />
+                <CalendarPreview bookings={bookings} />
               </div>
             </div>
           )}
@@ -876,12 +1007,12 @@ const BusinessDashboard: React.FC = () => {
                 </TabsList>
                 
                 <TabsContent value="upcoming">
-                  {mockBookings.filter(b => b.status === 'confirmed').length > 0 ? (
+                  {bookings.filter(b => b.status === 'confirmed').length > 0 ? (
                     <div className="space-y-4">
-                      {mockBookings
+                      {bookings
                         .filter(b => b.status === 'confirmed')
                         .map(booking => {
-                          const listing = mockListings.find(l => l.id === booking.listingId);
+                          const listing = listings.find(l => l.id === booking.listingId);
                           return (
                             <Card key={booking.id}>
                               <div className="p-6">
@@ -940,12 +1071,12 @@ const BusinessDashboard: React.FC = () => {
                 </TabsContent>
                 
                 <TabsContent value="pending">
-                  {mockBookings.filter(b => b.status === 'pending').length > 0 ? (
+                  {bookings.filter(b => b.status === 'pending').length > 0 ? (
                     <div className="space-y-4">
-                      {mockBookings
+                      {bookings
                         .filter(b => b.status === 'pending')
                         .map(booking => {
-                          const listing = mockListings.find(l => l.id === booking.listingId);
+                          const listing = listings.find(l => l.id === booking.listingId);
                           return (
                             <Card key={booking.id}>
                               <div className="p-6">

@@ -1,4 +1,4 @@
-import { database } from '../lib/firebase';
+import { database, auth } from '../lib/firebase';
 import { ref, get, set, push, update, remove, query, orderByChild, equalTo } from 'firebase/database';
 
 // API Configuration
@@ -135,9 +135,35 @@ export const getAuthHeader = () => {
 };
 
 export const getUserId = () => {
-  return localStorage.getItem('userId') || null;
+  // First try to get from localStorage
+  const storedUserId = localStorage.getItem('userId');
+  if (storedUserId) return storedUserId;
+  
+  // If not in localStorage, try to get from currently authenticated user
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    // Store the ID for future use
+    localStorage.setItem('userId', currentUser.uid);
+    return currentUser.uid;
+  }
+  
+  return null;
+};
+
+export const setUserData = (userId: string, userType: string = 'customer') => {
+  if (userId) {
+    localStorage.setItem('userId', userId);
+    localStorage.setItem('userType', userType);
+  }
 };
 
 export const getUserType = () => {
   return localStorage.getItem('userType') || 'customer';
+};
+
+// Helper to clear user data on logout
+export const clearUserData = () => {
+  localStorage.removeItem('userId');
+  localStorage.removeItem('userType');
+  localStorage.removeItem('authToken');
 };

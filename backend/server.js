@@ -71,12 +71,21 @@ const initializeDatabase = async () => {
 // Helper middleware for checking authentication
 // In a real application, this would verify JWT tokens
 const authenticateUser = (req, res, next) => {
-  // For demo purposes, we'll just pass through
+  // For demo purposes, we'll accept the user ID from headers
   // In a real app, this would verify the JWT token in the Authorization header
   const userId = req.headers['user-id'];
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized access' });
+  
+  // Allow requests without user-id for public endpoints or when testing
+  if (!userId && process.env.NODE_ENV === 'development') {
+    console.warn('Request made without user-id header - allowing in development mode');
+    req.userId = 'test-user-id';
+    return next();
   }
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized access - user ID not provided' });
+  }
+  
   req.userId = userId;
   next();
 };
@@ -483,11 +492,14 @@ app.get('/api/search', async (req, res) => {
 // User Routes (simplified - in a real app would have proper authentication)
 app.post('/api/users/register', async (req, res) => {
   try {
-    const { email, name, password, type } = req.body;
+    const { id, email, name, password, type } = req.body;
     
     if (!email || !name || !password || !type) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    
+    // Allow custom ID if provided (for integration with Firebase Auth)
+    const userId = id || `user-${uuidv4()}`;
     
     // Check if user with this email already exists
     const usersRef = ref(database, 'users');
@@ -507,8 +519,6 @@ app.post('/api/users/register', async (req, res) => {
       }
     }
     
-    const userId = `user-${uuidv4()}`;
-    
     const newUser = {
       id: userId,
       email,
@@ -522,7 +532,7 @@ app.post('/api/users/register', async (req, res) => {
     const userRef = ref(database, `users/${userId}`);
     await set(userRef, newUser);
     
-    // In a real app, would generate and return JWT token
+    // Return user info
     res.status(201).json({
       id: newUser.id,
       email: newUser.email,

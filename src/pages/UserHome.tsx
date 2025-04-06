@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, logOut } from '@/lib/firebase';
+import { Listing, Booking, SearchParams } from '@/api/types';
+import { fetchAPI, getUserId, getUserType, firebaseDB } from '@/api/apiClient';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   Loader2, 
   Search, 
@@ -27,88 +30,9 @@ import {
   ChevronRight,
   Heart,
   Building,
-  BadgePercent
+  BadgePercent,
+  AlertCircle
 } from 'lucide-react';
-
-// Mock data for listings
-const mockListings = [
-  {
-    id: '1',
-    title: 'Quiet Co-working Space',
-    description: 'Perfect for focused work with high-speed internet',
-    type: 'Co-working',
-    location: 'Mumbai, India',
-    price: 499,
-    currency: 'INR',
-    rating: 4.8,
-    reviews: 24,
-    image: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
-  },
-  {
-    id: '2',
-    title: 'Urban Fitness Center',
-    description: 'Fully equipped gym with personal training options',
-    type: 'Gym',
-    location: 'Delhi, India',
-    price: 799,
-    currency: 'INR',
-    rating: 4.5,
-    reviews: 18,
-    image: 'https://images.unsplash.com/photo-1534438097545-a2c22c57f2ad?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
-  },
-  {
-    id: '3',
-    title: 'Creative Studio with Natural Light',
-    description: 'Perfect for photography and creative projects',
-    type: 'Creative Studio',
-    location: 'Bangalore, India',
-    price: 1299,
-    currency: 'INR',
-    rating: 4.9,
-    reviews: 32,
-    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1738&q=80'
-  },
-  {
-    id: '4',
-    title: 'Rooftop Café for Private Events',
-    description: 'Host your next meetup or small gathering here',
-    type: 'Café',
-    location: 'Hyderabad, India',
-    price: 1999,
-    currency: 'INR',
-    rating: 4.7,
-    reviews: 15,
-    image: 'https://images.unsplash.com/photo-1521017432531-fbd92d768814?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
-  },
-];
-
-// Mock data for bookings
-const mockBookings = [
-  {
-    id: 'b1',
-    listingId: '1',
-    date: '2025-04-15',
-    time: '09:00 - 17:00',
-    status: 'confirmed',
-    totalPaid: 499
-  },
-  {
-    id: 'b2',
-    listingId: '2',
-    date: '2025-04-12',
-    time: '10:00 - 12:00',
-    status: 'confirmed',
-    totalPaid: 799
-  },
-  {
-    id: 'b3',
-    listingId: '3',
-    date: '2025-03-30',
-    time: '14:00 - 18:00',
-    status: 'cancelled',
-    totalPaid: 1299
-  }
-];
 
 // Category component
 const CategoryItem: React.FC<{
@@ -129,13 +53,15 @@ const CategoryItem: React.FC<{
 
 // Listing card component
 const ListingCard: React.FC<{
-  listing: typeof mockListings[0];
+  listing: Listing;
   onBookNow: (id: string) => void;
 }> = ({ listing, onBookNow }) => (
   <Card className="overflow-hidden transition-all hover:shadow-lg">
     <div className="relative h-48">
       <img 
-        src={listing.image} 
+        src={listing.images && listing.images.length > 0 
+          ? listing.images[0] 
+          : 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?ixlib=rb-4.0.3&auto=format&fit=crop&w=1740&q=80'}
         alt={listing.title} 
         className="h-full w-full object-cover"
       />
@@ -154,7 +80,7 @@ const ListingCard: React.FC<{
         </div>
         <div className="flex items-center bg-gray-100 px-2 py-1 rounded-md">
           <Star className="h-3 w-3 text-yellow-500 mr-1" />
-          <span className="text-xs font-medium">{listing.rating}</span>
+          <span className="text-xs font-medium">{listing.rating || 'New'}</span>
         </div>
       </div>
 
@@ -179,77 +105,93 @@ const ListingCard: React.FC<{
 
 // Booking card component
 const BookingCard: React.FC<{
-  booking: typeof mockBookings[0];
-  listing: typeof mockListings[0];
+  booking: Booking;
+  listing: Listing | null;
   onRebook?: (id: string) => void;
-}> = ({ booking, listing, onRebook }) => (
-  <Card>
-    <div className="p-4">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="font-medium">{listing.title}</h3>
-          <p className="text-sm text-gray-500">{listing.type}</p>
+}> = ({ booking, listing, onRebook }) => {
+  if (!listing) return null;
+  
+  return (
+    <Card>
+      <div className="p-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-medium">{listing?.title}</h3>
+            <p className="text-sm text-gray-500">{listing?.type}</p>
+          </div>
+          <span className={`px-3 py-1 text-xs rounded-full ${
+            booking.status === 'confirmed' 
+              ? 'bg-green-100 text-green-800' 
+              : booking.status === 'cancelled'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+          </span>
         </div>
-        <span className={`px-3 py-1 text-xs rounded-full ${
-          booking.status === 'confirmed' 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {booking.status === 'confirmed' ? 'Confirmed' : 'Cancelled'}
-        </span>
-      </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-y-2">
-        <div className="flex items-center">
-          <Calendar className="h-4 w-4 text-gray-500 mr-2" />
-          <span className="text-sm">{new Date(booking.date).toLocaleDateString('en-IN')}</span>
+        <div className="mt-4 grid grid-cols-2 gap-y-2">
+          <div className="flex items-center">
+            <Calendar className="h-4 w-4 text-gray-500 mr-2" />
+            <span className="text-sm">{new Date(booking.date).toLocaleDateString('en-IN')}</span>
+          </div>
+          <div className="flex items-center">
+            <Clock className="h-4 w-4 text-gray-500 mr-2" />
+            <span className="text-sm">{booking.time}</span>
+          </div>
+          <div className="flex items-center">
+            <Building className="h-4 w-4 text-gray-500 mr-2" />
+            <span className="text-sm">{listing.location}</span>
+          </div>
+          <div className="flex items-center">
+            <BadgePercent className="h-4 w-4 text-gray-500 mr-2" />
+            <span className="text-sm">₹{booking.totalPaid} paid</span>
+          </div>
         </div>
-        <div className="flex items-center">
-          <Clock className="h-4 w-4 text-gray-500 mr-2" />
-          <span className="text-sm">{booking.time}</span>
-        </div>
-        <div className="flex items-center">
-          <Building className="h-4 w-4 text-gray-500 mr-2" />
-          <span className="text-sm">{listing.location}</span>
-        </div>
-        <div className="flex items-center">
-          <BadgePercent className="h-4 w-4 text-gray-500 mr-2" />
-          <span className="text-sm">₹{booking.totalPaid} paid</span>
-        </div>
-      </div>
 
-      {onRebook && (
-        <div className="mt-4 pt-4 border-t text-right">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => onRebook(listing.id)}
-            className="space-x-1"
-          >
-            <Repeat className="h-4 w-4 mr-1" />
-            Rebook
-          </Button>
-        </div>
-      )}
-    </div>
-  </Card>
-);
+        {onRebook && (
+          <div className="mt-4 pt-4 border-t text-right">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onRebook(listing.id)}
+              className="space-x-1"
+            >
+              <Repeat className="h-4 w-4 mr-1" />
+              Rebook
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+};
 
 // Featured Carousel Component
-const FeaturedCarousel: React.FC = () => {
+const FeaturedCarousel: React.FC<{
+  listings: Listing[]
+  onBookNow: (id: string) => void
+}> = ({ listings, onBookNow }) => {
   return (
     <div className="relative py-6">
       <h2 className="text-xl font-medium mb-4">Featured Spaces</h2>
-      <div className="flex space-x-6 overflow-x-auto pb-4">
-        {mockListings.map(listing => (
-          <div key={listing.id} className="min-w-[300px] max-w-[300px]">
-            <ListingCard 
-              listing={listing} 
-              onBookNow={() => console.log(`Booking ${listing.id}`)} 
-            />
-          </div>
-        ))}
-      </div>
+      {listings.length > 0 ? (
+        <div className="flex space-x-6 overflow-x-auto pb-4">
+          {listings.map(listing => (
+            <div key={listing.id} className="min-w-[300px] max-w-[300px]">
+              <ListingCard 
+                listing={listing} 
+                onBookNow={onBookNow} 
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Card className="p-8 text-center">
+          <h3 className="text-lg font-medium mb-2">No listings available</h3>
+          <p className="text-gray-500 mb-4">Check back soon for new spaces</p>
+        </Card>
+      )}
     </div>
   );
 };
@@ -258,17 +200,123 @@ const FeaturedCarousel: React.FC = () => {
 const UserHome: React.FC = () => {
   const navigate = useNavigate();
   const [user, loading] = useAuthState(auth);
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [searchDate, setSearchDate] = useState("");
   const [searchType, setSearchType] = useState("");
+  
+  // Data states
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [featuredListings, setFeaturedListings] = useState<Listing[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [listingDetails, setListingDetails] = useState<Record<string, Listing>>({});
+  
+  // Loading states
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       // Redirect to auth page if not logged in
       navigate('/auth', { state: { userType: 'user' } });
+    } else if (user) {
+      // Load data when user is authenticated
+      loadListings();
+      loadBookings();
     }
   }, [user, loading, navigate]);
+
+  // Fetch all active listings from businesses
+  const loadListings = async () => {
+    setListingsLoading(true);
+    try {
+      // Use the fetchAPI function to get real listings data
+      const response = await fetchAPI('/listings');
+      
+      // Filter to only show active listings
+      const activeListings = response.filter((listing: Listing) => listing.active === true);
+      setListings(activeListings);
+      
+      // Set featured listings (listings with highest ratings)
+      if (activeListings.length > 0) {
+        // Sort by rating and take top 5
+        const featured = [...activeListings]
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          .slice(0, Math.min(5, activeListings.length));
+        setFeaturedListings(featured);
+      }
+      
+      setListingsLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch listings:', error);
+      toast({
+        title: "Error",
+        description: "Could not load listings. Please try again.",
+        variant: "destructive"
+      });
+      setListingsLoading(false);
+    }
+  };
+
+  // Fetch user's bookings with real API
+  const loadBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      // Use fetchAPI with proper headers for authentication
+      const response = await fetchAPI('/bookings', {
+        headers: {
+          'user-id': userId,
+          'user-type': 'customer'
+        }
+      });
+      
+      setBookings(response);
+      
+      // Fetch details for all listings associated with bookings
+      if (response && response.length > 0) {
+        const listingIds = Array.from(new Set(response.map((booking: Booking) => booking.listingId)));
+        await loadListingDetails(listingIds);
+      }
+      
+      setBookingsLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch bookings:', error);
+      toast({
+        title: "Error",
+        description: "Could not load your bookings. Please try again.",
+        variant: "destructive"
+      });
+      setBookingsLoading(false);
+    }
+  };
+
+  // Fetch details of specific listings by IDs using real API
+  const loadListingDetails = async (listingIds: string[]) => {
+    try {
+      const details: Record<string, Listing> = {};
+      
+      for (const id of listingIds) {
+        try {
+          // Use fetchAPI to get individual listing details
+          const response = await fetchAPI(`/listings/${id}`);
+          details[id] = response;
+        } catch (listingError) {
+          console.error(`Error fetching details for listing ${id}:`, listingError);
+          // Continue with other listings even if one fails
+        }
+      }
+      
+      setListingDetails(prev => ({...prev, ...details}));
+    } catch (error) {
+      console.error('Failed to fetch listing details:', error);
+    }
+  };
 
   const handleLogout = async () => {
     await logOut();
@@ -276,22 +324,72 @@ const UserHome: React.FC = () => {
   };
 
   const handleBookNow = (listingId: string) => {
-    console.log(`Booking listing ${listingId}`);
-    // In a real app, this would navigate to a booking page or open a booking dialog
+    navigate(`/booking/${listingId}`);
   };
 
   const handleRebook = (listingId: string) => {
-    console.log(`Rebooking listing ${listingId}`);
+    navigate(`/booking/${listingId}`);
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  // Implement real search functionality using API
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Searching with params:", { searchLocation, searchDate, searchType });
+    setListingsLoading(true);
+    
+    try {
+      // Prepare search params
+      const searchParams: Record<string, string> = {};
+      
+      if (searchLocation) searchParams.location = searchLocation;
+      if (searchType) searchParams.type = searchType;
+      if (searchDate) searchParams.date = searchDate;
+      if (searchQuery) searchParams.query = searchQuery;
+      
+      // Construct query string
+      const queryString = Object.entries(searchParams)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join('&');
+      
+      // Make API call
+      const response = await fetchAPI(`/listings${queryString ? '?' + queryString : ''}`);
+      
+      // Filter to only show active listings
+      const activeListings = response.filter((listing: Listing) => listing.active === true);
+      setListings(activeListings);
+      setListingsLoading(false);
+    } catch (error) {
+      console.error('Search failed:', error);
+      toast({
+        title: "Search Error",
+        description: "Could not perform search. Please try again.",
+        variant: "destructive"
+      });
+      setListingsLoading(false);
+    }
   };
 
-  const handleCategoryClick = (category: string) => {
-    console.log(`Selected category: ${category}`);
+  // Use real API for category filtering
+  const handleCategoryClick = async (category: string) => {
     setSearchType(category);
+    setListingsLoading(true);
+    
+    try {
+      // Fetch listings by category using API
+      const response = await fetchAPI(`/listings?type=${category}`);
+      
+      // Filter to only show active listings
+      const activeListings = response.filter((listing: Listing) => listing.active === true);
+      setListings(activeListings);
+      setListingsLoading(false);
+    } catch (error) {
+      console.error(`Failed to fetch ${category} listings:`, error);
+      toast({
+        title: "Error",
+        description: `Could not load ${category} listings.`,
+        variant: "destructive"
+      });
+      setListingsLoading(false);
+    }
   };
 
   if (loading) {
@@ -404,8 +502,13 @@ const UserHome: React.FC = () => {
           </div>
         </section>
 
-        {/* Featured Carousel */}
-        <FeaturedCarousel />
+        {/* Featured Carousel - Now showing real top-rated listings */}
+        {featuredListings.length > 0 && (
+          <FeaturedCarousel 
+            listings={featuredListings}
+            onBookNow={handleBookNow}
+          />
+        )}
 
         {/* Categories Section */}
         <section className="py-6">
@@ -445,91 +548,109 @@ const UserHome: React.FC = () => {
           </div>
         </section>
 
-        {/* Trending Listings Section */}
+        {/* Available Spaces Section - Now showing real business listings */}
         <section className="py-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-medium">Trending Listings</h2>
-            <Button variant="ghost" size="sm" className="text-sm text-gray-600">
-              View All <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+            <h2 className="text-xl font-medium">Available Spaces</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {mockListings.map(listing => (
-              <ListingCard 
-                key={listing.id} 
-                listing={listing} 
-                onBookNow={handleBookNow} 
-              />
-            ))}
-          </div>
+          {listingsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-bookeasy-orange" />
+            </div>
+          ) : listings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {listings.map(listing => (
+                <ListingCard 
+                  key={listing.id} 
+                  listing={listing} 
+                  onBookNow={handleBookNow} 
+                />
+              ))}
+            </div>
+          ) : (
+            <Card className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No listings available</h3>
+              <p className="text-gray-500 mb-4">
+                We couldn't find any spaces matching your criteria.
+                Try adjusting your search or check back soon for new listings.
+              </p>
+            </Card>
+          )}
         </section>
 
-        {/* Booking History Section */}
+        {/* Booking History Section - Now showing real user bookings */}
         <section className="py-6">
           <h2 className="text-xl font-medium mb-4">Your Bookings</h2>
           
-          <Tabs defaultValue="upcoming">
-            <TabsList className="mb-6">
-              <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-              <TabsTrigger value="past">Past</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="upcoming">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {mockBookings
-                  .filter(booking => booking.status === 'confirmed' && new Date(booking.date) >= new Date())
-                  .map(booking => {
-                    const listing = mockListings.find(l => l.id === booking.listingId);
-                    if (!listing) return null;
-                    return (
+          {bookingsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-bookeasy-orange" />
+            </div>
+          ) : (
+            <Tabs defaultValue="upcoming">
+              <TabsList className="mb-6">
+                <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                <TabsTrigger value="past">Past</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="upcoming">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {bookings
+                    .filter(booking => 
+                      (booking.status === 'confirmed' || booking.status === 'pending') && 
+                      new Date(booking.date) >= new Date())
+                    .map(booking => (
                       <BookingCard 
                         key={booking.id}
                         booking={booking}
-                        listing={listing}
+                        listing={listingDetails[booking.listingId] || null}
                       />
-                    );
-                  })}
-                
-                {mockBookings.filter(booking => 
-                  booking.status === 'confirmed' && new Date(booking.date) >= new Date()
-                ).length === 0 && (
-                  <Card className="col-span-full p-6 text-center">
-                    <h3 className="font-medium mb-2">No upcoming bookings</h3>
-                    <p className="text-gray-500 mb-4">Browse and book spaces to see them here</p>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="past">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {mockBookings
-                  .filter(booking => new Date(booking.date) < new Date())
-                  .map(booking => {
-                    const listing = mockListings.find(l => l.id === booking.listingId);
-                    if (!listing) return null;
-                    return (
+                    ))}
+                  
+                  {bookings.filter(booking => 
+                    (booking.status === 'confirmed' || booking.status === 'pending') && 
+                    new Date(booking.date) >= new Date()
+                  ).length === 0 && (
+                    <Card className="col-span-full p-6 text-center">
+                      <h3 className="font-medium mb-2">No upcoming bookings</h3>
+                      <p className="text-gray-500 mb-4">Browse and book spaces to see them here</p>
+                    </Card>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="past">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {bookings
+                    .filter(booking => 
+                      new Date(booking.date) < new Date() || 
+                      booking.status === 'completed' ||
+                      booking.status === 'cancelled')
+                    .map(booking => (
                       <BookingCard 
                         key={booking.id}
                         booking={booking}
-                        listing={listing}
-                        onRebook={handleRebook}
+                        listing={listingDetails[booking.listingId] || null}
+                        onRebook={booking.status !== 'cancelled' ? handleRebook : undefined}
                       />
-                    );
-                  })}
-                
-                {mockBookings.filter(booking => 
-                  new Date(booking.date) < new Date()
-                ).length === 0 && (
-                  <Card className="col-span-full p-6 text-center">
-                    <h3 className="font-medium mb-2">No booking history yet</h3>
-                    <p className="text-gray-500">Your past bookings will appear here</p>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
+                    ))}
+                  
+                  {bookings.filter(booking => 
+                    new Date(booking.date) < new Date() || 
+                    booking.status === 'completed' ||
+                    booking.status === 'cancelled'
+                  ).length === 0 && (
+                    <Card className="col-span-full p-6 text-center">
+                      <h3 className="font-medium mb-2">No booking history yet</h3>
+                      <p className="text-gray-500">Your past bookings will appear here</p>
+                    </Card>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
         </section>
       </main>
 
