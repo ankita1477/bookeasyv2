@@ -1,0 +1,137 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-poppins overflow-x-hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-futura;
+  }
+
+  /* Glass card effect */
+  .glass {
+    @apply backdrop-blur-md bg-white/10 border border-white/20 shadow-lg;
+  }
+
+  /* Glowing elements */
+  .glow {
+    @apply transition-all relative;
+  }
+
+  .glow::after {
+    content: '';
+    @apply absolute inset-0 rounded-lg -z-10 opacity-0 transition-opacity duration-300;
+    box-shadow: 0 0 15px rgba(255, 152, 0, 0.7);
+  }
+
+  .glow:hover::after {
+    @apply opacity-100;
+  }
+
+  /* Scroll progress bar */
+  .progress-bar {
+    @apply h-1 bg-bookeasy-orange fixed top-0 left-0 z-50;
+    transition: width 0.1s ease-out;
+  }
+
+  /* Special button styles */
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 hover:shadow-lg;
+  }
+
+  .btn-find {
+    @apply btn-primary bg-bookeasy-purple text-white hover:bg-opacity-90;
+  }
+
+  .btn-list {
+    @apply btn-primary bg-bookeasy-orange text-bookeasy-dark hover:bg-opacity-90;
+  }
+
+  /* Glass card hover effects */
+  .glass-card {
+    @apply rounded-xl glass transition-all duration-300 hover:shadow-xl;
+    transform-style: preserve-3d;
+  }
+
+  .glass-card:hover {
+    transform: translateY(-5px) rotateX(5deg);
+  }
+
+  /* Feature card glow effects */
+  .feature-card {
+    @apply rounded-xl p-6 transition-all duration-300 relative overflow-hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .feature-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    box-shadow: 0 0 25px rgba(255, 152, 0, 0.7);
+  }
+
+  .feature-card:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Neon glow effects */
+  .neon-border {
+    @apply relative rounded-xl;
+    box-shadow: 0 0 10px rgba(30, 13, 115, 0.6);
+  }
+
+  .neon-border:hover {
+    box-shadow: 0 0 20px rgba(30, 13, 115, 0.8), 0 0 30px rgba(30, 13, 115, 0.4);
+  }
+}
+
+/* Add this to make Futura-like font available */
+@font-face {
+  font-family: 'Futura';
+  src: local('Futura'), url('https://fonts.cdnfonts.com/css/futura-pt') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
