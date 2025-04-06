@@ -4,7 +4,7 @@ import { Business, ApiResponse } from './types';
 import { fetchAPI } from './apiClient';
 
 const BUSINESSES_PATH = 'businesses';
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bookeasy-back.onrender.com/api';
 
 // Firebase Database operations
 export const getBusinessById = async (businessId: string): Promise<Business | null> => {
