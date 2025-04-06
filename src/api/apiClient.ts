@@ -3,8 +3,8 @@ import { ref, get, set, push, update, remove, query, orderByChild, equalTo } fro
 
 // API Configuration
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://bookeasy-api.vercel.app/api' 
-  : 'http://localhost:5000/api';
+  ? 'https://bookeasy-back.onrender.com/api' 
+  : 'https://bookeasy-back.onrender.com/api';
 
 // Helper function to handle fetch API responses
 const handleResponse = async (response: Response) => {
